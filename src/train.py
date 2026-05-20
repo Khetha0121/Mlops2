@@ -1,6 +1,9 @@
-"""
+    """
 Model training script for spam classifier.
-Trains a Naive Bayes model using TF-IDF features.
+
+This module trains and compares candidate classifiers using TF-IDF features.
+It supports Naive Bayes, Logistic Regression, and Linear SVM, then selects the
+best model by F1 score and saves both the trained model and the vectorizer.
 """
 
 import pandas as pd
@@ -9,6 +12,8 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.metrics import precision_recall_fscore_support
 import logging
@@ -133,15 +138,72 @@ def split_data(df, test_size=0.2, random_state=42):
     return X_train, X_test, y_train, y_test
 
 
-def save_model(classifier, model_path, vectorizer_path):
+def build_classifiers():
+    """Return a dictionary of classifiers to compare."""
+    return {
+        'Naive Bayes': MultinomialNB(alpha=0.1),
+        'Logistic Regression': LogisticRegression(solver='liblinear', max_iter=1000),
+        'Linear SVM': LinearSVC(max_iter=10000)
+    }
+
+
+def evaluate_model(name, model, X_train_tfidf, X_test_tfidf, y_train, y_test):
+    """Train and evaluate a single classifier on TF-IDF features."""
+    logger.info(f"Training and evaluating {name}")
+    model.fit(X_train_tfidf, y_train)
+    predictions = model.predict(X_test_tfidf)
+
+    accuracy = accuracy_score(y_test, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_test, predictions, average='binary'
+    )
+
+    logger.info(f"{name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+
+    return {
+        'name': name,
+        'model': model,
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'predictions': predictions
+    }
+
+
+def compare_classifiers(X_train, X_test, y_train, y_test):
+    """Compare multiple classifiers using the same TF-IDF feature set."""
+    logger.info("Preparing TF-IDF features for classifier comparison")
+    vectorizer = TfidfVectorizer(
+        max_features=5000,
+        ngram_range=(1, 2),
+        min_df=2,
+        max_df=0.95
+    )
+
+    X_train_tfidf = vectorizer.fit_transform(X_train)
+    X_test_tfidf = vectorizer.transform(X_test)
+
+    results = []
+    for name, model in build_classifiers().items():
+        result = evaluate_model(name, model, X_train_tfidf, X_test_tfidf, y_train, y_test)
+        results.append(result)
+
+    best_result = max(results, key=lambda item: item['f1_score'])
+    logger.info(f"Best classifier: {best_result['name']} with F1 score {best_result['f1_score']:.4f}")
+
+    return best_result, vectorizer
+
+
+def save_model(model, vectorizer, model_path, vectorizer_path):
     """Save trained model and vectorizer."""
     logger.info(f"Saving model to {model_path}")
     with open(model_path, 'wb') as f:
-        pickle.dump(classifier.model, f)
+        pickle.dump(model, f)
     
     logger.info(f"Saving vectorizer to {vectorizer_path}")
     with open(vectorizer_path, 'wb') as f:
-        pickle.dump(classifier.vectorizer, f)
+        pickle.dump(vectorizer, f)
     
     logger.info("Model and vectorizer saved successfully")
 
@@ -163,17 +225,11 @@ def main():
     # Split data
     X_train, X_test, y_train, y_test = split_data(df)
     
-    # Initialize and train classifier
-    logger.info("Initializing spam classifier")
-    classifier = SpamClassifier(max_features=5000, ngram_range=(1, 2))
+    # Compare candidate classifiers and pick the best model
+    best_result, vectorizer = compare_classifiers(X_train, X_test, y_train, y_test)
     
-    classifier.train(X_train, y_train)
-    
-    # Evaluate model
-    metrics = classifier.evaluate(X_test, y_test)
-    
-    # Save model
-    save_model(classifier, model_path, vectorizer_path)
+    # Save the best performing model and shared vectorizer
+    save_model(best_result['model'], vectorizer, model_path, vectorizer_path)
     
     logger.info("Training pipeline complete!")
 

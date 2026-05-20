@@ -129,8 +129,8 @@ def preprocess_data(df):
         df (pandas.DataFrame): Raw dataset containing 'subject', 'body', and 'label'.
 
     Returns:
-        pandas.DataFrame: Dataset augmented with 'text', 'processed_text', and
-        'label_encoded'.
+        pandas.DataFrame: Dataset augmented with 'text', 'processed_text',
+        'is_duplicate', and 'label_encoded'.
     """
     logger.info("Starting data preprocessing")
     
@@ -144,6 +144,11 @@ def preprocess_data(df):
     # Preprocess text and create a cleaned text column.
     logger.info("Cleaning and preprocessing text")
     df['processed_text'] = df['text'].apply(preprocessor.preprocess)
+    
+    # Flag duplicate records based on normalized processed text.
+    # All rows sharing the same cleaned text are marked True.
+    logger.info("Flagging duplicate messages")
+    df['is_duplicate'] = df.duplicated(subset=['processed_text'], keep=False)
     
     # Convert labels to binary numeric values, where spam=1 and ham=0.
     logger.info("Encoding labels")
@@ -172,7 +177,7 @@ def save_processed_data(df, output_path):
     logger.info(f"Saving processed data to {output_path}")
     
     # Keep only the columns needed for downstream training/evaluation.
-    processed_df = df[['email_id', 'text', 'processed_text', 'label', 'label_encoded']]
+    processed_df = df[['email_id', 'text', 'processed_text', 'label', 'label_encoded', 'is_duplicate']]
     
     # Write the cleaned dataset to disk.
     processed_df.to_csv(output_path, index=False)

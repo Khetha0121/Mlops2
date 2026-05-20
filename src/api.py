@@ -24,7 +24,12 @@ predictor = None
 
 
 def get_predictor():
-    """Get or initialize the spam predictor."""
+    """Get or initialize the SpamPredictor instance.
+
+    This function lazily initializes the predictor the first time the API
+    receives a request. On subsequent calls, the same instance is reused
+    to avoid reloading the model and vectorizer repeatedly.
+    """
     global predictor
     if predictor is None:
         project_root = Path(__file__).parent.parent

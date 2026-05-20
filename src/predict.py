@@ -1,6 +1,9 @@
 """
-Prediction script for spam classifier.
-Loads trained model and makes predictions on new messages.
+Interactive prediction script for spam classifier.
+
+This module loads a trained spam classification model and TF-IDF vectorizer,
+then exposes a command-line interface for single-message classification.
+It also supports probability output for confidence reporting.
 """
 
 import pickle
